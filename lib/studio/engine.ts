@@ -6,7 +6,6 @@ import { cfg } from "./config";
 import { sendEmail } from "./email";
 import { buildClientNotice, buildHandoff } from "./handoff";
 import { syncHubspot } from "./hubspot";
-import { reviewUrl } from "./review";
 import { blankCriteria, isCrit, verdict } from "./rubric";
 import { getCall, saveCall } from "./store";
 import { CRITERIA, type CallRecord, type Route, type Turn } from "./types";
@@ -164,24 +163,20 @@ export async function finalizeCall(id: string, reason: string, durationS?: numbe
   call.route = route;
   call.route_reason = why;
 
-  if (route === "not_qualified") {
-    // The AI may be wrong: a rejection goes to the founder with the transcript, never silently to the bin.
-    call.founder_decision = "pending";
-    const to = cfg.email.founder();
-    const note = buildHandoff(call, { reviewUrl: reviewUrl(call.id) });
-    const r = await sendEmail(to, note.subject, note.text, note.html);
-    call.handoff = { to, status: r.status, at: new Date().toISOString(), error: r.error };
-  } else {
-    const to = route === "qualified" ? [...cfg.email.designers(), ...cfg.email.frontDesk()] : cfg.email.frontDesk();
+  if (route === "qualified") {
+    // The only email in the system: the designer is told a consultation is scheduled, with a short summary.
+    const to = cfg.email.designers();
     const note = buildHandoff(call);
     const r = await sendEmail(to, note.subject, note.text, note.html);
     call.handoff = { to, status: r.status, at: new Date().toISOString(), error: r.error };
-    if (route === "qualified") {
-      if (call.lead.email) {
-        const n = buildClientNotice(call);
-        call.handoff.client = (await sendEmail([call.lead.email], n.subject, n.text, n.html)).status;
-      } else call.handoff.client = "skipped";
-    }
+    if (call.lead.email) {
+      const n = buildClientNotice(call);
+      call.handoff.client = (await sendEmail([call.lead.email], n.subject, n.text, n.html)).status;
+    } else call.handoff.client = "skipped";
+  } else {
+    // Rejections (founder reviews in HubSpot) and callbacks (HubSpot stage) are not emailed.
+    if (route === "not_qualified") call.founder_decision = "pending";
+    call.handoff = { to: [], status: "not_needed", at: null };
   }
 
   const ai_inr =
@@ -205,7 +200,7 @@ export async function founderDecide(id: string, decision: "forward" | "keep"): P
   } else {
     if (call.founder_decision === "forwarded") return call;
     call.founder_decision = "forwarded";
-    const to = [...cfg.email.designers(), ...cfg.email.frontDesk()];
+    const to = cfg.email.designers();
     const note = buildHandoff(call);
     const r = await sendEmail(to, note.subject, note.text, note.html);
     call.handoff = { to, status: r.status, at: new Date().toISOString(), error: r.error };

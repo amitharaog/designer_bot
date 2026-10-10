@@ -31,8 +31,6 @@ export const cfg = {
     resendKey: () => process.env.RESEND_API_KEY,
     from: () => process.env.HANDOFF_FROM_EMAIL ?? "Aangan Enquiries <onboarding@resend.dev>",
     designers: () => list(process.env.DESIGNER_EMAILS),
-    frontDesk: () => list(process.env.FRONT_DESK_EMAILS),
-    founder: () => list(process.env.FOUNDER_EMAILS),
   },
   hubspot: { token: () => process.env.HUBSPOT_TOKEN, pipelineId: () => process.env.HUBSPOT_PIPELINE_ID },
   appUrl: () => process.env.APP_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000"),
