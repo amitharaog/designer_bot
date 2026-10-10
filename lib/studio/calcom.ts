@@ -13,15 +13,43 @@ const fmt = new Intl.DateTimeFormat("en-IN", {
 });
 export const slotLabel = (iso: string) => fmt.format(new Date(iso));
 
+const CAL_API = process.env.CAL_BASE_URL ?? "https://api.cal.com/v2";
+
 const live = () => !!(cfg.cal.key() && cfg.cal.eventTypeId());
 
-/** CAL_EVENT_TYPE_ID may be the numeric id or the link slug (then CAL_USERNAME is needed). */
-function eventRef(): { eventTypeId: number } | { eventTypeSlug: string; username: string } {
+type CalEventType = { id: number | string; slug?: string; title?: string };
+let resolved: { eventTypeId: number } | null = null;
+
+/**
+ * CAL_EVENT_TYPE_ID should be the numeric id, but Cal.com's UI mostly shows slugs and links. If it isn't a number,
+ * look the event type up with the API key (match by slug, then a "consult" title, then the only one) and cache it.
+ */
+async function eventRef(): Promise<{ eventTypeId: number }> {
   const v = cfg.cal.eventTypeId()!.trim();
   if (/^\d+$/.test(v)) return { eventTypeId: Number(v) };
-  const username = cfg.cal.username();
-  if (!username) throw new Error(`CAL_EVENT_TYPE_ID "${v}" is a slug, so CAL_USERNAME must be set (from cal.com/USERNAME/${v})`);
-  return { eventTypeSlug: v, username };
+  if (resolved) return resolved;
+  const res = await fetch(`${CAL_API}/event-types`, {
+    headers: { authorization: `Bearer ${cfg.cal.key()}`, "cal-api-version": "2024-06-14" },
+    signal: AbortSignal.timeout(6000),
+  });
+  if (!res.ok) throw new Error(`Cal.com event-types ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const body = await res.json();
+  const list: CalEventType[] = Array.isArray(body?.data)
+    ? body.data
+    : (body?.data?.eventTypeGroups ?? []).flatMap((g: { eventTypes?: CalEventType[] }) => g.eventTypes ?? []);
+  const needle = (v.replace(/^https?:\/\/[^/]+\//i, "").split("/").filter(Boolean).pop() ?? v).toLowerCase();
+  const slug = (e: CalEventType) => String(e.slug ?? "").toLowerCase();
+  const hit =
+    list.find((e) => slug(e) === needle) ??
+    list.find((e) => slug(e).includes(needle) || needle.includes(slug(e) || "\u0000")) ??
+    list.find((e) => /consult/i.test(`${e.title ?? ""} ${e.slug ?? ""}`)) ??
+    (list.length === 1 ? list[0] : undefined);
+  if (!hit) {
+    throw new Error(`No Cal.com event type matches "${v}". Event types on this account: ${list.map((e) => `${e.id} (${e.slug})`).join(", ") || "none"}`);
+  }
+  console.log(`[studio] Cal.com event type resolved: ${hit.id} (${hit.slug})`);
+  resolved = { eventTypeId: Number(hit.id) };
+  return resolved;
 }
 
 /** Up to 3 slots on different days (earliest first). Live from Cal.com, or clearly-labelled demo slots. */
@@ -29,8 +57,8 @@ export async function getSlots(): Promise<{ slots: Slot[]; demo: boolean }> {
   if (!live()) return { slots: demoSlots(), demo: true };
   const start = new Date(Date.now() + 4 * 3600_000);
   const end = new Date(Date.now() + 10 * 24 * 3600_000);
-  const url = new URL("https://api.cal.com/v2/slots");
-  for (const [k, v] of Object.entries(eventRef())) url.searchParams.set(k, String(v));
+  const url = new URL(`${CAL_API}/slots`);
+  url.searchParams.set("eventTypeId", String((await eventRef()).eventTypeId));
   url.searchParams.set("start", start.toISOString());
   url.searchParams.set("end", end.toISOString());
   url.searchParams.set("timeZone", cfg.tz);
@@ -72,13 +100,13 @@ export async function bookSlot(slot: Slot, lead: Lead, phone: string | null): Pr
   const email = lead.email || cfg.cal.fallbackEmail();
   if (!email) return { ...base, status: "failed", error: "No attendee email: caller gave none and CAL_FALLBACK_EMAIL is unset" };
   try {
-    const res = await fetch("https://api.cal.com/v2/bookings", {
+    const res = await fetch(`${CAL_API}/bookings`, {
       method: "POST",
       headers: { authorization: `Bearer ${cfg.cal.key()}`, "cal-api-version": "2024-08-13", "content-type": "application/json" },
       signal: AbortSignal.timeout(8000),
       body: JSON.stringify({
         start: slot.start,
-        ...eventRef(),
+        ...(await eventRef()),
         attendee: { name: lead.name || "Phone enquiry", email, timeZone: cfg.tz, ...(phone ? { phoneNumber: phone } : {}) },
         metadata: { source: "aangan-phone-agent" },
       }),

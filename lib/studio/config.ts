@@ -25,8 +25,6 @@ export const cfg = {
   cal: {
     key: () => process.env.CAL_API_KEY,
     eventTypeId: () => process.env.CAL_EVENT_TYPE_ID,
-    // Needed only when CAL_EVENT_TYPE_ID is the event's link slug (cal.com/USERNAME/slug) rather than its numeric id.
-    username: () => process.env.CAL_USERNAME,
     fallbackEmail: () => process.env.CAL_FALLBACK_EMAIL,
   },
   email: {
