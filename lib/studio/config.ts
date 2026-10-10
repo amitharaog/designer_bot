@@ -10,8 +10,8 @@ export const cfg = {
   gemini: {
     key: () => process.env.GEMINI_API_KEY,
     base: () => process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com",
-    model: () => process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
-    // USD per 1M tokens. Defaults are gemini-2.5-flash list prices; set these if you change GEMINI_MODEL.
+    model: () => process.env.GEMINI_MODEL ?? "gemini-flash-latest",
+    // USD per 1M tokens (Flash-class list prices). Set these to your model's current prices.
     inUsdPerM: () => num(process.env.GEMINI_IN_USD_PER_M, 0.3),
     outUsdPerM: () => num(process.env.GEMINI_OUT_USD_PER_M, 2.5),
   },

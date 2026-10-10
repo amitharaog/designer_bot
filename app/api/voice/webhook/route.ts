@@ -1,83 +1,99 @@
 import { requireWebhook } from "@/lib/studio/auth";
-import { finalizeCall, handleUtterance, ingestTranscript, startCall } from "@/lib/studio/engine";
+import { ingestTranscript } from "@/lib/studio/engine";
 import { getCall } from "@/lib/studio/store";
 import { handle, readJson } from "@/lib/http";
 
 /**
- * Voice-provider adapter (Vaani Labs). One endpoint, three events:
- *   start     { call_id, from }                      -> { reply }          (the greeting to speak)
- *   utterance { call_id, text }                      -> { reply, end_call }
- *   end       { call_id, duration_s? }               -> { ok }             (hangup; finalises + sends the handoff)
+ * Vaani webhook ("Call Post-Processing" event). Vaani runs the conversation with its own model; once the call is over
+ * it posts the finished call here, and we analyse the transcript, qualify, book, email the designer and update HubSpot.
  *
- * The field names below are tolerant guesses. Vaani's real webhook/custom-LLM payload must be mapped here (and
- * only here) once their docs/dashboard are in hand: nothing else in the system knows about the provider.
+ * Vaani's payload isn't documented publicly, so this is deliberately forgiving: it looks for the call id, phone and
+ * transcript under common names at any nesting depth. Every payload is logged (truncated) so the mapping can be checked.
  */
 type Payload = Record<string, unknown>;
-const pick = (p: Payload, ...keys: string[]) => {
-  for (const k of keys) if (typeof p[k] === "string" || typeof p[k] === "number") return String(p[k]);
-  return undefined;
-};
 
-/** Accepts [{role|speaker, text|content|message}] or "Agent: ...\nCaller: ..." lines. */
-function parseTranscript(raw: unknown): { role: "agent" | "caller"; text: string }[] {
-  const role = (r: unknown) => (/agent|bot|assistant|ai|model/i.test(String(r)) ? "agent" : "caller") as "agent" | "caller";
+/** Breadth-first search for the first key (case-insensitive) whose value is a string/number, to a few levels deep. */
+function find(obj: unknown, keys: string[], want: "scalar" | "any" = "scalar", depth = 4): unknown {
+  const wanted = keys.map((k) => k.toLowerCase());
+  let level: unknown[] = [obj];
+  for (let d = 0; d <= depth && level.length; d++) {
+    const next: unknown[] = [];
+    for (const o of level) {
+      if (!o || typeof o !== "object") continue;
+      if (Array.isArray(o)) continue;
+      for (const [k, v] of Object.entries(o as Payload)) {
+        if (wanted.includes(k.toLowerCase())) {
+          if (want === "any" && v != null && v !== "") return v;
+          if (want === "scalar" && (typeof v === "string" || typeof v === "number") && String(v).trim()) return String(v);
+        }
+        if (v && typeof v === "object" && !Array.isArray(v)) next.push(v);
+      }
+    }
+    level = next;
+  }
+  return undefined;
+}
+const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+
+type T = { role: "agent" | "caller"; text: string };
+const roleOf = (r: unknown): T["role"] => (/agent|bot|assistant|\bai\b|model|system|vaani/i.test(String(r ?? "")) ? "agent" : "caller");
+
+/** Accepts [{role|speaker, text|content|message}] or "Agent: …\nUser: …" text; unparseable text becomes one caller turn. */
+function parseTranscript(raw: unknown): T[] {
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[")) {
+      try {
+        return parseTranscript(JSON.parse(trimmed));
+      } catch {}
+    }
+    const lines = trimmed
+      .split(/\r?\n/)
+      .map((l) => l.match(/^\s*\[?([A-Za-z _-]{2,20})\]?\s*[:\-–]\s*(.+)$/))
+      .filter((m): m is RegExpMatchArray => !!m)
+      .map((m) => ({ role: roleOf(m[1]), text: m[2].trim() }));
+    return lines.length ? lines : [{ role: "caller", text: trimmed }];
+  }
   if (Array.isArray(raw)) {
     return raw
-      .map((m) => (m && typeof m === "object" ? (m as Payload) : {}))
-      .map((m) => ({ role: role(m.role ?? m.speaker ?? m.from), text: String(m.text ?? m.content ?? m.message ?? "").trim() }))
+      .map((m) => (m && typeof m === "object" ? (m as Payload) : { text: String(m) }))
+      .map((m) => ({
+        role: roleOf(m.role ?? m.speaker ?? m.from ?? m.sender ?? m.participant),
+        text: String(m.text ?? m.content ?? m.message ?? m.transcript ?? m.utterance ?? "").trim(),
+      }))
       .filter((m) => m.text);
-  }
-  if (typeof raw === "string") {
-    return raw
-      .split(/\r?\n/)
-      .map((l) => l.match(/^\s*([A-Za-z ]{2,20}):\s*(.+)$/))
-      .filter((m): m is RegExpMatchArray => !!m)
-      .map((m) => ({ role: role(m[1]), text: m[2].trim() }));
   }
   return [];
 }
 
 export const POST = handle(async (req) => {
   requireWebhook(req);
-  const raw = await readJson(req);
-  // Providers often wrap the call under data / payload / call: flatten one level so the picks below find it.
-  const nest = (k: string) => (raw[k] && typeof raw[k] === "object" && !Array.isArray(raw[k]) ? (raw[k] as Payload) : {});
-  const p: Payload = { ...raw, ...nest("call"), ...nest("payload"), ...nest("data") };
-  // Vaani's payload shape isn't documented publicly: log it (truncated) so the mapping below can be checked in Vercel logs.
+  const p = await readJson(req);
   console.log("[vaani] webhook payload", JSON.stringify(p).slice(0, 4000));
-  const id = pick(p, "call_id", "callId", "call_sid", "session_id", "id", "conversation_id", "room_name");
-  // Vaani's "Test Connectivity" ping carries no call: acknowledge it so the setup check passes.
-  if (!id) return Response.json({ ok: true, note: "received; no call id, nothing to process" });
-  const event = (pick(p, "event", "type") ?? "utterance").toLowerCase();
-  // The customer is the caller on inbound calls, but the callee on outbound (e.g. Vaani's "call me" test).
-  const outbound = /outbound/i.test(pick(p, "direction", "call_direction", "call_type") ?? "");
-  const phone = outbound
-    ? pick(p, "to", "to_number", "callee", "customer_number", "phone")
-    : pick(p, "from", "from_number", "caller_number", "caller", "customer_number", "phone");
 
-  if (event === "start" || event === "call_started") {
-    const { reply } = await startCall({ id, phone });
-    return Response.json({ reply, end_call: false });
-  }
-  const dur = Number(pick(p, "duration_s", "duration", "call_duration"));
-  const turns = parseTranscript(p.transcript ?? p.messages ?? p.conversation ?? p.transcript_object ?? p.chat_history);
-  // Post-call mode (Vaani "Call Post-Processing"): a finished transcript arrives. Accept it whatever the event is named.
-  if (turns.length >= 2 || (turns.length && /end|complete|post|process|transcript|analysis|hangup/.test(event))) {
-    const call = await ingestTranscript({ id, phone, turns, durationS: Number.isFinite(dur) && dur > 0 ? dur : undefined });
+  const event = String(find(p, ["event", "event_type", "type", "status"]) ?? "").toLowerCase();
+  const id = str(find(p, ["call_id", "callId", "session_id", "sessionId", "conversation_id", "room_name", "call_sid", "id"]));
+  if (!id || event.includes("test")) return Response.json({ ok: true, note: "received; nothing to process" });
+
+  const outbound = /outbound/i.test(String(find(p, ["direction", "call_direction", "call_type"]) ?? ""));
+  const phone = str(
+    outbound
+      ? find(p, ["to", "to_number", "callee", "customer_number", "user_number", "phone_number"])
+      : find(p, ["from", "from_number", "caller", "caller_number", "customer_number", "user_number", "phone_number"]),
+  );
+  const turns = parseTranscript(find(p, ["transcript", "transcript_object", "transcription", "messages", "conversation", "chat_history", "transcript_text"], "any"));
+  const dur = Number(find(p, ["duration_s", "duration", "call_duration", "duration_seconds"]));
+  const durationS = Number.isFinite(dur) && dur > 0 ? dur : undefined;
+
+  if (turns.length) {
+    const call = await ingestTranscript({ id, phone, turns, durationS });
     return Response.json({ ok: true, route: call.route });
   }
-  if (event === "end" || event === "call_ended" || event === "hangup") {
-    if (!(await getCall(id))) {
-      // A call we never heard speak (caller hung up at once): still create the record so the front desk calls back.
-      const call = await ingestTranscript({ id, phone, turns: [], durationS: Number.isFinite(dur) && dur > 0 ? dur : undefined });
-      return Response.json({ ok: true, route: call.route });
-    }
-    await finalizeCall(id, "hangup", Number.isFinite(dur) && dur > 0 ? dur : undefined);
-    return Response.json({ ok: true });
+  // A finished call with no transcript (caller hung up at once): log it as a front-desk callback, once.
+  if (/end|complete|post|process|hangup|no_answer|failed/.test(event) && !(await getCall(id))) {
+    const call = await ingestTranscript({ id, phone, turns: [], durationS });
+    return Response.json({ ok: true, route: call.route });
   }
-  const text = pick(p, "text", "transcript", "utterance", "user_message", "speech");
-  if (!text?.trim()) return Response.json({ reply: "Sorry, I didn't catch that. Could you say it again?", end_call: false });
-  if (!(await getCall(id))) await startCall({ id, phone });
-  const { reply, end_call } = await handleUtterance(id, text);
-  return Response.json({ reply, end_call });
+  return Response.json({ ok: true, note: "no transcript in this event" });
 });
