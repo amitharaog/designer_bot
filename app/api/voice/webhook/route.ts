@@ -49,7 +49,11 @@ export const POST = handle(async (req) => {
   // Vaani's "Test Connectivity" ping carries no call: acknowledge it so the setup check passes.
   if (!id) return Response.json({ ok: true, note: "received; no call id, nothing to process" });
   const event = (pick(p, "event", "type") ?? "utterance").toLowerCase();
-  const phone = pick(p, "from", "caller_number", "caller", "phone");
+  // The customer is the caller on inbound calls, but the callee on outbound (e.g. Vaani's "call me" test).
+  const outbound = /outbound/i.test(pick(p, "direction", "call_direction", "call_type") ?? "");
+  const phone = outbound
+    ? pick(p, "to", "to_number", "callee", "customer_number", "phone")
+    : pick(p, "from", "from_number", "caller_number", "caller", "customer_number", "phone");
 
   if (event === "start" || event === "call_started") {
     const { reply } = await startCall({ id, phone });
