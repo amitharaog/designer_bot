@@ -288,3 +288,27 @@ export async function ingestTranscript(opts: { id?: string; phone?: string | nul
   await saveCall(call);
   return finalizeCall(id, "transcript", opts.durationS);
 }
+
+/** Re-run the post-call analysis on a stored call (e.g. after an AI error). Updates the same HubSpot deal. */
+export async function reprocessCall(id: string): Promise<CallRecord> {
+  const call = await getCall(id);
+  if (!call) throw new Error("Unknown call");
+  const turns = call.transcript.map(({ role, text }) => ({ role, text }));
+  Object.assign(call, {
+    finalized: false,
+    criteria: blankCriteria(),
+    lead: {},
+    summary: "",
+    fail_evidence: "",
+    caller_questions: [],
+    route: null,
+    route_reason: null,
+    handoff: null,
+    booking: null,
+    founder_decision: null,
+    cost: null,
+  });
+  call.usage.errors = 0;
+  await saveCall(call);
+  return ingestTranscript({ id, phone: call.caller_phone, turns, durationS: call.duration_s ?? undefined, simulated: call.simulated });
+}

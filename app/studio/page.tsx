@@ -1,4 +1,5 @@
 import Link from "next/link";
+import RetryButton from "@/components/studio/RetryButton";
 import StudioNav, { Locked } from "@/components/studio/StudioNav";
 import { studioKeyOk } from "@/lib/studio/auth";
 import { listCalls } from "@/lib/studio/store";
@@ -12,7 +13,10 @@ export default async function Leads(props: PageProps<"/studio">) {
   const key = typeof q.key === "string" ? q.key : null;
   if (!studioKeyOk(key)) return <Locked />;
   const includeTest = q.test === "1";
-  const leads = (await listCalls()).filter((c) => isLead(c) && (includeTest || !c.simulated)).slice(0, 100);
+  const all = await listCalls();
+  const leads = all.filter((c) => isLead(c) && (includeTest || !c.simulated)).slice(0, 100);
+  // Calls the AI couldn't process (e.g. a Gemini outage): keep them visible so they can be re-run, never lost.
+  const stuck = all.filter((c) => c.finalized && c.usage.errors > 0 && c.transcript.some((t) => t.role === "caller")).slice(0, 20);
   const kq = key ? `?key=${encodeURIComponent(key)}` : "";
   const testHref = `/studio?${new URLSearchParams({ ...(key ? { key } : {}), ...(includeTest ? {} : { test: "1" }) })}`;
 
@@ -33,6 +37,23 @@ export default async function Leads(props: PageProps<"/studio">) {
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft"><p className="text-xs font-semibold uppercase text-slate-500">Booked</p><p className="mt-1 text-2xl font-extrabold">{leads.filter(booked).length}</p></div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft"><p className="text-xs font-semibold uppercase text-slate-500">To schedule</p><p className="mt-1 text-2xl font-extrabold">{leads.filter((c) => !booked(c)).length}</p></div>
         </div>
+
+        {stuck.length > 0 && (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-bold text-amber-900">Calls the AI couldn&apos;t process ({stuck.length})</p>
+            <ul className="mt-2 space-y-2">
+              {stuck.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span>
+                    {new Date(c.started_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} · {c.caller_phone ?? "unknown number"}
+                    <span className="ml-2 text-xs text-amber-800">{(c.route_reason ?? "").slice(0, 90)}</span>
+                  </span>
+                  <RetryButton id={c.id} k={key} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {leads.length === 0 ? (
           <div className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-600">
