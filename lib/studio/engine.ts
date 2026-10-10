@@ -5,6 +5,8 @@ import { bookSlot, getSlots } from "./calcom";
 import { cfg } from "./config";
 import { sendEmail } from "./email";
 import { buildHandoff } from "./handoff";
+import { syncHubspot } from "./hubspot";
+import { reviewUrl } from "./review";
 import { blankCriteria, isCrit, verdict } from "./rubric";
 import { getCall, saveCall } from "./store";
 import { CRITERIA, type CallRecord, type Route } from "./types";
@@ -50,7 +52,9 @@ export async function startCall(opts: { id?: string; phone?: string | null; simu
     usage: { input_tokens: 0, output_tokens: 0, model_calls: 0, errors: 0 },
     duration_s: null,
     cost: null,
-    outcome: "open",
+    founder_decision: null,
+    fail_evidence: "",
+    hubspot: null,
     finalized: false,
   };
   await saveCall(call);
@@ -77,6 +81,9 @@ export async function handleUtterance(id: string, text: string): Promise<{ reply
     for (const k of CRITERIA) if (isCrit(data.criteria?.[k])) call.criteria[k] = data.criteria[k];
     for (const [k, v] of Object.entries(data.lead ?? {})) if (typeof v === "string" && v.trim()) (call.lead as Record<string, string>)[k] = v.trim();
     if (data.summary) call.summary = data.summary;
+    if (data.fail_evidence?.trim()) call.fail_evidence = data.fail_evidence.trim();
+    // A rejection the model cannot quote is not trusted: keep asking instead of ending the call.
+    if (!call.fail_evidence) for (const k of CRITERIA) if (call.criteria[k] === "fail") call.criteria[k] = "unclear";
     if (data.caller_questions?.length) call.caller_questions = [...new Set([...call.caller_questions, ...data.caller_questions])].slice(0, 10);
 
     reply = data.reply;
@@ -158,7 +165,12 @@ export async function finalizeCall(id: string, reason: string, durationS?: numbe
   call.route_reason = why;
 
   if (route === "not_qualified") {
-    call.handoff = { to: [], status: "not_needed", at: null };
+    // The AI may be wrong: a rejection goes to the founder with the transcript, never silently to the bin.
+    call.founder_decision = "pending";
+    const to = cfg.email.founder();
+    const note = buildHandoff(call, { reviewUrl: reviewUrl(call.id) });
+    const r = await sendEmail(to, note.subject, note.text, note.html);
+    call.handoff = { to, status: r.status, at: new Date().toISOString(), error: r.error };
   } else {
     const to = route === "qualified" ? [...cfg.email.designers(), ...cfg.email.frontDesk()] : cfg.email.frontDesk();
     const note = buildHandoff(call);
@@ -171,6 +183,28 @@ export async function finalizeCall(id: string, reason: string, durationS?: numbe
   const voice_inr = call.simulated ? 0 : (call.duration_s / 60) * cfg.voiceInrPerMin();
   call.cost = { ai_inr, voice_inr, total_inr: ai_inr + voice_inr };
   call.finalized = true;
+  call.hubspot = await syncHubspot(call);
+  await saveCall(call);
+  return call;
+}
+
+/** Founder's call on an AI-rejected (or review) lead after reading the transcript. Idempotent. */
+export async function founderDecide(id: string, decision: "forward" | "keep"): Promise<CallRecord> {
+  const call = await getCall(id);
+  if (!call || !call.finalized) throw new Error("Unknown call");
+  if (call.route === "qualified") throw new Error("This call was already qualified");
+  if (decision === "keep") {
+    if (call.founder_decision === "forwarded") return call; // the designer has already been told
+    call.founder_decision = "kept_rejected";
+  } else {
+    if (call.founder_decision === "forwarded") return call;
+    call.founder_decision = "forwarded";
+    const to = [...cfg.email.designers(), ...cfg.email.frontDesk()];
+    const note = buildHandoff(call);
+    const r = await sendEmail(to, note.subject, note.text, note.html);
+    call.handoff = { to, status: r.status, at: new Date().toISOString(), error: r.error };
+  }
+  call.hubspot = await syncHubspot(call);
   await saveCall(call);
   return call;
 }

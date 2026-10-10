@@ -32,7 +32,11 @@ export const cfg = {
     from: () => process.env.HANDOFF_FROM_EMAIL ?? "Aangan Enquiries <onboarding@resend.dev>",
     designers: () => list(process.env.DESIGNER_EMAILS),
     frontDesk: () => list(process.env.FRONT_DESK_EMAILS),
+    founder: () => list(process.env.FOUNDER_EMAILS),
   },
+  hubspot: { token: () => process.env.HUBSPOT_TOKEN, pipelineId: () => process.env.HUBSPOT_PIPELINE_ID },
+  appUrl: () => process.env.APP_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000"),
+  reviewSecret: () => process.env.REVIEW_SECRET ?? process.env.STUDIO_KEY,
   webhookSecret: () => process.env.VOICE_WEBHOOK_SECRET,
   studioKey: () => process.env.STUDIO_KEY,
 };

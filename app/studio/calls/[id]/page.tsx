@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import OutcomeButtons from "@/components/studio/OutcomeButtons";
 import StudioNav, { Locked } from "@/components/studio/StudioNav";
 import { studioKeyOk } from "@/lib/studio/auth";
 import { getCall } from "@/lib/studio/store";
@@ -42,11 +41,6 @@ export default async function CallPage(props: PageProps<"/studio/calls/[id]">) {
                 <li key={k}><span className={`inline-block w-5 font-bold ${c.criteria[k] === "pass" ? "text-emerald-600" : c.criteria[k] === "fail" ? "text-rose-600" : "text-amber-600"}`}>{mark[c.criteria[k]]}</span>{CRITERIA_LABEL[k]}</li>
               ))}
             </ul>
-            <h2 className="mt-4 text-sm font-bold uppercase tracking-wide text-slate-500">Outcome</h2>
-            <div className="mt-2"><OutcomeButtons id={c.id} current={c.outcome} k={key} /></div>
-            <p className="mt-4 text-xs text-slate-500">
-              {c.cost ? `Cost ₹${c.cost.total_inr.toFixed(2)} (AI ₹${c.cost.ai_inr.toFixed(2)}, voice ₹${c.cost.voice_inr.toFixed(2)}) · ${c.usage.input_tokens + c.usage.output_tokens} tokens · ${c.duration_s}s` : ""}
-            </p>
           </section>
         </div>
 

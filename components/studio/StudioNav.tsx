@@ -8,7 +8,7 @@ export default function StudioNav({ k, active }: { k: string | null; active: "da
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         <p className="font-extrabold tracking-tight">
-          Aangan Studio <span className="font-medium text-slate-500">· phone agent</span>
+          Aangan Studio <span className="font-medium text-slate-500">· designers</span>
         </p>
         <nav className="flex gap-1">
           <Link href={`/studio${q}`} className={tab(active !== "simulate")}>Dashboard</Link>

@@ -35,6 +35,7 @@ export const TURN_SCHEMA = {
     },
     caller_questions: { type: "ARRAY", items: { type: "STRING" } },
     summary: { type: "STRING" },
+    fail_evidence: str,
     chosen_slot: str,
     end_call: { type: "BOOLEAN" },
   },
@@ -47,6 +48,7 @@ export type TurnOut = {
   lead: Lead;
   caller_questions?: string[];
   summary: string;
+  fail_evidence?: string | null;
   chosen_slot?: string | null;
   end_call: boolean;
 };
@@ -83,6 +85,7 @@ Set each criterion to: "pass" (caller's words clearly satisfy it), "fail" (clear
 - decision_maker: do NOT push. "unclear" unless clear. "I'm just doing research for my in-laws" is not sufficient on its own, so mark it unclear (the designer will check).
 Things that do NOT disqualify: not knowing what they want, calling at night, asking about price, being unsure about materials/style, a single room with full execution, a rented flat (if no structural changes).
 If any criterion fails: close gracefully, e.g. "This sounds like it may not be the right fit for us right now, but please reach out if your timeline or scope changes." Be specific and honest about why when it's scope/area/timeline, give no false hope, set end_call true after the goodbye. Never offer a slot to a caller with a failed criterion.
+A "fail" must be CLEAR. If the audio seems garbled, a word is ambiguous, the caller is vague, or you are inferring rather than hearing it, set "unclear" and ask one direct question instead. A wrong rejection loses a real customer; the founder reviews every rejection, so fail only on what you actually heard. When you do set "fail", put the caller's exact words behind it in fail_evidence (otherwise leave it null).
 Only offer slots when real_project, in_area and timeline are all "pass".
 
 # Pricing: not your decision
@@ -99,6 +102,7 @@ ${booked ? `A consultation is ALREADY BOOKED for ${call.booking!.label}. Do not 
 - criteria: current state of all five (carry forward earlier values unless new information changes them).
 - lead: facts the caller has stated so far (name, email only if they volunteered one, location, project_type, size, timeline, budget_mentioned, decision_maker_note, scope_notes). Keep earlier values; use null for unknown.
 - caller_questions: questions the caller asked that the designer should be ready for.
+- fail_evidence: the caller's exact words behind any "fail" criterion, else null.
 - summary: 1-2 factual sentences for the designer's handoff note: what they want, where, when, and anything notable. No invention.
 - chosen_slot (id or null), end_call (true only when you are saying goodbye).
 

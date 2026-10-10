@@ -8,10 +8,12 @@ Vaani ──POST /api/voice/webhook {start | utterance | end}──▶ lib/studi
    Process   rubric.ts      the five criteria; code, not the model, decides the route
    AI        gemini.ts      one JSON call per turn: reply + criteria + lead fields + summary
    Output    calcom.ts      books a slot (qualified only)   email.ts / handoff.ts   designer or front desk
-   Log       store.ts       one record per call, with token + minute cost → /studio dashboard
+   Founder   hubspot.ts     every call → HubSpot contact + deal + note (transcript), cost/route as deal properties
+   Designer  /studio        Vercel-hosted lead list for designers (handoff note + transcript)
+   Log       store.ts       one record per call, with token + minute cost
 ```
 
-Routes: **Qualified** (designer email + booked slot), **Needs review** (front-desk email: unclear 1–3 after the question cap, caller hung up, or an AI/tool error, so a call is never silently dropped), **Not qualified** (graceful close, logged, no email).
+Routes: **Qualified** (designer email + booked slot), **Needs review** (front-desk email: unclear 1–3 after the question cap, caller hung up, or an AI/tool error, so a call is never silently dropped), **Not qualified** (graceful close). A rejection is never final: the AI can be wrong, so every rejected call is emailed to the founder and lands in HubSpot stage "AI rejected: founder review". The founder opens the signed review link (`/review/[id]?t=…`), reads the transcript and the caller's exact words behind the rejection, and picks **Push to designer** (designer email + HubSpot stage "Forwarded by founder") or **Keep rejected**. The AI is also told to fail a criterion only on what it clearly heard, and a rejection it can't quote is turned back into a question.
 
 Run it: `cp studio/env.example .env.local`, fill in what you have, `npm run dev`, open `/studio/simulate`. Everything degrades visibly without keys (email → logged "dry_run", Cal.com → clearly-labelled demo slots).
 
@@ -25,3 +27,6 @@ Run it: `cp studio/env.example .env.local`, fill in what you have, `npm run dev`
 - **Past enquiries**: put the 40 transcripts in `studio/enquiries/` (up to 6 are loaded as examples).
 - **Rates**: `VAANI_INR_PER_MIN` is a placeholder; the dashboard cost depends on it.
 - **Components map wording**: it says the agent may share an indicative *range*. The code gives no number at all, per pricing.md; update the map to match.
+
+## HubSpot
+`HUBSPOT_TOKEN=… npm run hubspot:setup` creates the deal properties and the "Aangan phone enquiries" pipeline and prints `HUBSPOT_PIPELINE_ID`. Not yet run against a real HubSpot account; only tested against a stand-in API. Won/lost is the deal stage, so conversion and cost-per-lead reports are built in HubSpot.

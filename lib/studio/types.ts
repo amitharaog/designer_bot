@@ -25,7 +25,9 @@ export type Lead = {
 };
 
 export type Route = "qualified" | "needs_review" | "not_qualified";
-export type Outcome = "open" | "won" | "lost";
+export type FounderDecision = "pending" | "forwarded" | "kept_rejected";
+
+export type HubspotState = { status: "synced" | "dry_run" | "failed"; contact_id?: string; deal_id?: string; error?: string };
 
 export type Turn = { role: "caller" | "agent"; text: string; at: string; latency_ms?: number };
 
@@ -61,6 +63,10 @@ export type CallRecord = {
   usage: { input_tokens: number; output_tokens: number; model_calls: number; errors: number };
   duration_s: number | null;
   cost: { ai_inr: number; voice_inr: number; total_inr: number } | null;
-  outcome: Outcome;
+  /** AI-rejected calls wait here for the founder to read the transcript and decide. */
+  founder_decision: FounderDecision | null;
+  /** The caller's own words behind a failed criterion, so the founder can judge the AI. */
+  fail_evidence: string;
+  hubspot: HubspotState | null;
   finalized: boolean;
 };
