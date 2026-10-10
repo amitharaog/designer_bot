@@ -14,7 +14,8 @@ let cache: { docs: string; examples: string } | null = null;
  */
 export async function loadKnowledge() {
   if (cache) return cache;
-  const read = (f: string) => fs.readFile(dir("knowledge", f), "utf8");
+  // qualified.md has one example rupee figure for a budget mismatch; strip it so the model has no number to repeat.
+  const read = async (f: string) => (await fs.readFile(dir("knowledge", f), "utf8")).replace(/₹[\d.–-]+\s*lakh/g, "a very small amount");
   const [services, qualified] = await Promise.all([read("services.md"), read("qualified.md")]);
   const docs = [
     `<services>\n${services}\n</services>`,

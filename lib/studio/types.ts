@@ -59,7 +59,7 @@ export type CallRecord = {
   booking: Booking | null;
   route: Route | null;
   route_reason: string | null;
-  handoff: { to: string[]; status: "sent" | "dry_run" | "failed" | "not_needed"; at: string | null; error?: string } | null;
+  handoff: { to: string[]; status: "sent" | "dry_run" | "failed" | "not_needed"; at: string | null; error?: string; client?: "sent" | "dry_run" | "failed" | "skipped" } | null;
   usage: { input_tokens: number; output_tokens: number; model_calls: number; errors: number };
   duration_s: number | null;
   cost: { ai_inr: number; voice_inr: number; total_inr: number } | null;

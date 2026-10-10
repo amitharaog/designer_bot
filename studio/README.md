@@ -30,3 +30,9 @@ Run it: `cp studio/env.example .env.local`, fill in what you have, `npm run dev`
 
 ## HubSpot
 `HUBSPOT_TOKEN=… npm run hubspot:setup` creates the deal properties and the "Aangan phone enquiries" pipeline and prints `HUBSPOT_PIPELINE_ID`. Not yet run against a real HubSpot account; only tested against a stand-in API. Won/lost is the deal stage, so conversion and cost-per-lead reports are built in HubSpot.
+
+## Post-call mode (the whiteboard flow)
+Vaani runs the conversation using `studio/vaani-agent.md` (generate with `node scripts/vaani-prompt.mjs`) and sends the finished transcript to `/api/voice/webhook` (`event: call_ended` + `transcript`). `ingestTranscript` analyses it once with Gemini, applies the rubric, books the earliest slot for qualified leads, emails the designer (and the client, if they gave an email), or sends a rejection to the founder to review. A call where the caller never spoke becomes a front-desk callback. Because Vaani's model speaks live, pricing can't be gated in code there: the transcript is checked afterwards and any agent turn that looks like a quoted figure puts a WARNING at the top of the handoff.
+
+## Testing with one email address
+Set `DESIGNER_EMAILS`, `FOUNDER_EMAILS` and `FRONT_DESK_EMAILS` to your own address, and leave `HANDOFF_FROM_EMAIL` empty (Resend's sandbox sender only delivers to the Resend account owner).

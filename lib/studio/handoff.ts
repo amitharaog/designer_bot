@@ -71,3 +71,16 @@ ${c.caller_questions.length ? `<p style="font-size:14px;margin-bottom:2px"><b>Ca
 </div>`;
   return { subject, text, html };
 }
+
+/** Confirmation to the caller (only when they gave an email on the call). Never contains any price. */
+export function buildClientNotice(c: CallRecord) {
+  const name = c.lead.name ? ` ${c.lead.name.split(" ")[0]}` : "";
+  const booked = c.booking && c.booking.status !== "failed";
+  const line = booked
+    ? `Your design consultation is booked for ${c.booking!.label} (IST). Your designer already has everything you told us, so you won't need to repeat yourself.`
+    : "One of our designers will call you shortly to arrange a design consultation. They already have everything you told us, so you won't need to repeat yourself.";
+  const subject = booked ? "Your Aangan Studio consultation is booked" : "Thanks for calling Aangan Studio";
+  const text = `Hi${name},\n\nThanks for calling Aangan Studio. ${line}\n\nPricing is confirmed by your designer at the consultation, after they understand your site and requirements.\n\nAangan Studio, Pune`;
+  const html = `<div style="font-family:system-ui,sans-serif;max-width:560px;color:#0f172a;line-height:1.5"><p>Hi${esc(name)},</p><p>Thanks for calling Aangan Studio. ${esc(line)}</p><p style="color:#475569;font-size:14px">Pricing is confirmed by your designer at the consultation, after they understand your site and requirements.</p><p>Aangan Studio, Pune</p></div>`;
+  return { subject, text, html };
+}

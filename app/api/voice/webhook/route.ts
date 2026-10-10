@@ -57,7 +57,11 @@ export const POST = handle(async (req) => {
     return Response.json({ ok: true, route: call.route });
   }
   if (event === "end" || event === "call_ended" || event === "hangup") {
-    if (!(await getCall(id))) return Response.json({ ok: true });
+    if (!(await getCall(id))) {
+      // A call we never heard speak (caller hung up at once): still create the record so the front desk calls back.
+      const call = await ingestTranscript({ id, phone, turns: [], durationS: Number.isFinite(dur) && dur > 0 ? dur : undefined });
+      return Response.json({ ok: true, route: call.route });
+    }
     await finalizeCall(id, "hangup", Number.isFinite(dur) && dur > 0 ? dur : undefined);
     return Response.json({ ok: true });
   }

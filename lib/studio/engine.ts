@@ -4,7 +4,7 @@ import { analyzeTranscript, asksPrice, FALLBACK_REPLY, GREETING, guardReply, PRI
 import { bookSlot, getSlots } from "./calcom";
 import { cfg } from "./config";
 import { sendEmail } from "./email";
-import { buildHandoff } from "./handoff";
+import { buildClientNotice, buildHandoff } from "./handoff";
 import { syncHubspot } from "./hubspot";
 import { reviewUrl } from "./review";
 import { blankCriteria, isCrit, verdict } from "./rubric";
@@ -176,6 +176,12 @@ export async function finalizeCall(id: string, reason: string, durationS?: numbe
     const note = buildHandoff(call);
     const r = await sendEmail(to, note.subject, note.text, note.html);
     call.handoff = { to, status: r.status, at: new Date().toISOString(), error: r.error };
+    if (route === "qualified") {
+      if (call.lead.email) {
+        const n = buildClientNotice(call);
+        call.handoff.client = (await sendEmail([call.lead.email], n.subject, n.text, n.html)).status;
+      } else call.handoff.client = "skipped";
+    }
   }
 
   const ai_inr =
@@ -249,6 +255,8 @@ export async function ingestTranscript(opts: { id?: string; phone?: string | nul
   call.after_hours = afterHours(new Date(call.started_at));
   call.transcript = opts.turns.map((t) => ({ ...t, at: now.toISOString() }));
   call.pricing_asked = call.transcript.some((t) => t.role === "caller" && asksPrice(t.text));
+  // Vaani's own model is speaking live, so code can't gate its words. Check afterwards and flag any figure it may have quoted.
+  const priceLeak = call.transcript.some((t) => t.role === "agent" && guardReply(t.text).blocked);
 
   if (call.transcript.some((t) => t.role === "caller")) {
     try {
@@ -269,6 +277,8 @@ export async function ingestTranscript(opts: { id?: string; phone?: string | nul
       call.route_reason = `AI error: ${e instanceof Error ? e.message : String(e)}`;
     }
   }
+
+  if (priceLeak) call.summary = `WARNING: the agent may have quoted a price on this call. Check the transcript. ${call.summary}`.trim();
 
   // Qualified: book the earliest slot (the caller was told a designer will confirm a time).
   if (verdict(call.criteria).kind === "qualified" && !call.usage.errors && !call.booking) {
