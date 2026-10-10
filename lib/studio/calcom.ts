@@ -15,13 +15,22 @@ export const slotLabel = (iso: string) => fmt.format(new Date(iso));
 
 const live = () => !!(cfg.cal.key() && cfg.cal.eventTypeId());
 
+/** CAL_EVENT_TYPE_ID may be the numeric id or the link slug (then CAL_USERNAME is needed). */
+function eventRef(): { eventTypeId: number } | { eventTypeSlug: string; username: string } {
+  const v = cfg.cal.eventTypeId()!.trim();
+  if (/^\d+$/.test(v)) return { eventTypeId: Number(v) };
+  const username = cfg.cal.username();
+  if (!username) throw new Error(`CAL_EVENT_TYPE_ID "${v}" is a slug, so CAL_USERNAME must be set (from cal.com/USERNAME/${v})`);
+  return { eventTypeSlug: v, username };
+}
+
 /** Up to 3 slots on different days (earliest first). Live from Cal.com, or clearly-labelled demo slots. */
 export async function getSlots(): Promise<{ slots: Slot[]; demo: boolean }> {
   if (!live()) return { slots: demoSlots(), demo: true };
   const start = new Date(Date.now() + 4 * 3600_000);
   const end = new Date(Date.now() + 10 * 24 * 3600_000);
   const url = new URL("https://api.cal.com/v2/slots");
-  url.searchParams.set("eventTypeId", cfg.cal.eventTypeId()!);
+  for (const [k, v] of Object.entries(eventRef())) url.searchParams.set(k, String(v));
   url.searchParams.set("start", start.toISOString());
   url.searchParams.set("end", end.toISOString());
   url.searchParams.set("timeZone", cfg.tz);
@@ -69,7 +78,7 @@ export async function bookSlot(slot: Slot, lead: Lead, phone: string | null): Pr
       signal: AbortSignal.timeout(8000),
       body: JSON.stringify({
         start: slot.start,
-        eventTypeId: Number(cfg.cal.eventTypeId()),
+        ...eventRef(),
         attendee: { name: lead.name || "Phone enquiry", email, timeZone: cfg.tz, ...(phone ? { phoneNumber: phone } : {}) },
         metadata: { source: "aangan-phone-agent" },
       }),
