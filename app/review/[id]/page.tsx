@@ -41,7 +41,7 @@ export default async function ReviewPage(props: PageProps<"/review/[id]">) {
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Full transcript</h2>
         <div className="mt-3 space-y-2">
           {c.transcript.map((m, i) => (
-            <p key={i} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.role === "agent" ? "bg-slate-100" : "ml-auto bg-brand-600 text-white"}`}>{m.text}</p>
+            <p key={i} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.role === "agent" ? "bg-sand" : "ml-auto bg-ink text-white"}`}>{m.text}</p>
           ))}
         </div>
       </section>

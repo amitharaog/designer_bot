@@ -2,6 +2,16 @@
 
 @theme {
   --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+
+  /* Designer desk: warm studio neutrals with a clay accent */
+  --color-sand: #f6f3ee;
+  --color-line: #e7e1d7;
+  --color-clay-50: #fbf3ee;
+  --color-clay-100: #f5e1d5;
+  --color-clay-500: #c0643c;
+  --color-clay-600: #a8532f;
+  --color-clay-700: #8a4325;
 
   /* Brand: indigo, matching step 1 of the flow */
   --color-brand-50: #eef2ff;
@@ -21,8 +31,8 @@
   --color-decide: #d97706;
   --color-commit: #059669;
 
-  --color-ink: #0f172a;
-  --color-canvas: #f5f6fb;
+  --color-ink: #1c1917;
+  --color-canvas: #f6f3ee;
 
   --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px -12px rgb(15 23 42 / 0.12);
   --shadow-lift: 0 2px 4px rgb(15 23 42 / 0.05), 0 18px 40px -16px rgb(79 70 229 / 0.35);

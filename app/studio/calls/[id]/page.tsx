@@ -1,54 +1,126 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CallButton, Chip, DateBlock, LeadChips } from "@/components/studio/LeadParts";
+import RetryButton from "@/components/studio/RetryButton";
 import StudioNav, { Locked } from "@/components/studio/StudioNav";
 import { studioKeyOk } from "@/lib/studio/auth";
+import { dateTime, isBooked, longDate, timeShort } from "@/lib/studio/format";
 import { getCall } from "@/lib/studio/store";
 import { CRITERIA, CRITERIA_LABEL } from "@/lib/studio/types";
 
-export default async function CallPage(props: PageProps<"/studio/calls/[id]">) {
+export default async function Brief(props: PageProps<"/studio/calls/[id]">) {
   const [{ id }, q] = await Promise.all([props.params, props.searchParams]);
   const key = typeof q.key === "string" ? q.key : null;
   if (!studioKeyOk(key)) return <Locked />;
   const c = await getCall(id);
   if (!c) notFound();
   const kq = key ? `?key=${encodeURIComponent(key)}` : "";
-  const mark = { pass: "✔", fail: "✘", unclear: "?" } as const;
+  const booked = isBooked(c);
+  const l = c.lead;
+  const details: [string, string | null | undefined][] = [
+    ["Location", l.location],
+    ["Space", [l.project_type, l.size].filter(Boolean).join(", ")],
+    ["Timeline", l.timeline],
+    ["Decision-maker", l.decision_maker_note],
+    ["Budget mentioned", l.budget_mentioned ?? "Not mentioned (we don't ask)"],
+    ["Email", l.email],
+    ["Notes", l.scope_notes],
+  ];
+  const status = booked ? (
+    <Chip tone="green">Consultation booked</Chip>
+  ) : c.route === "qualified" || c.founder_decision === "forwarded" ? (
+    <Chip tone="clay">To schedule</Chip>
+  ) : c.route === "not_qualified" ? (
+    <Chip>Not a fit (founder reviews)</Chip>
+  ) : (
+    <Chip tone="amber">Needs review</Chip>
+  );
+  const dot = { pass: "bg-emerald-500", fail: "bg-rose-500", unclear: "bg-amber-400" } as const;
+  const word = { pass: "Yes", fail: "No", unclear: "Not confirmed" } as const;
+
   return (
     <>
       <StudioNav k={key} active="call" />
-      <main className="mx-auto max-w-4xl px-4 pb-20 pt-6">
-        <Link href={`/studio${kq}`} className="text-sm font-semibold text-slate-500 hover:underline">← All calls</Link>
-        <h1 className="mt-2 text-2xl font-extrabold tracking-tight">{c.lead.name ?? "Unknown caller"} <span className="text-base font-medium text-slate-500">{c.caller_phone}</span></h1>
-        <p className="text-sm text-slate-600">
-          {c.route ? `${c.route.replace("_", " ")} — ${c.route_reason}` : "Call in progress"}
-          {c.simulated && " · test call"}
-        </p>
+      <main className="mx-auto max-w-6xl px-4 pb-24 pt-6">
+        <Link href={`/studio${kq}`} className="text-sm font-semibold text-stone-500 hover:text-ink">← Back to leads</Link>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-            <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Handoff</h2>
-            <p className="mt-2 text-sm">{c.summary || "–"}</p>
-            <dl className="mt-3 grid grid-cols-[110px_1fr] gap-x-3 gap-y-1 text-sm">
-              {([["Location", c.lead.location], ["Project", [c.lead.project_type, c.lead.size].filter(Boolean).join(", ")], ["Timeline", c.lead.timeline], ["Budget said", c.lead.budget_mentioned], ["Decision-maker", c.lead.decision_maker_note], ["Booked", c.booking ? `${c.booking.label} (${c.booking.status})` : null], ["Email", c.handoff ? `${c.handoff.status}${c.handoff.to.length ? ` → ${c.handoff.to.join(", ")}` : ""}${c.handoff.error ? ` — ${c.handoff.error}` : ""}` : null]] as [string, string | null | undefined][]).map(([k, v]) => (
-                <div key={k} className="contents"><dt className="text-slate-500">{k}</dt><dd>{v || "–"}</dd></div>
+        <section className="mt-4 flex flex-wrap items-center gap-5 rounded-2xl border border-line bg-white p-5">
+          {booked && <DateBlock iso={c.booking!.start} />}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">{status}{c.simulated && <Chip>Test call</Chip>}</div>
+            <h1 className="mt-2 font-display text-3xl tracking-tight text-ink sm:text-4xl">{l.name ?? "Unknown caller"}</h1>
+            <p className="mt-1 text-stone-600">
+              {[l.project_type, l.location].filter(Boolean).join(" in ") || "Project details below"}
+              {booked && <> · <b className="text-ink">{longDate(c.booking!.start)}, {timeShort(c.booking!.start)}</b>{c.booking!.designer ? ` with ${c.booking!.designer}` : ""}</>}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <CallButton phone={c.caller_phone} />
+            <span className="text-sm text-stone-500">{c.caller_phone}</span>
+          </div>
+        </section>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-3">
+          <section className="rounded-2xl border border-line bg-white p-6 lg:col-span-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-clay-600">Design brief</p>
+            <p className="mt-2 font-display text-xl leading-relaxed text-ink">{c.summary || "No summary for this call."}</p>
+            <dl className="mt-6 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+              {details.filter(([, v]) => v).map(([k, v]) => (
+                <div key={k} className="border-t border-line pt-3">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-stone-500">{k}</dt>
+                  <dd className="mt-1 text-[15px] text-ink">{v}</dd>
+                </div>
               ))}
             </dl>
+            {c.caller_questions.length > 0 && (
+              <div className="mt-6 rounded-xl bg-sand p-4">
+                <p className="text-sm font-bold text-ink">Be ready for</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-stone-700">{c.caller_questions.map((x) => <li key={x}>{x}</li>)}</ul>
+              </div>
+            )}
+            {c.pricing_asked && (
+              <p className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+                <b>Pricing:</b> the caller asked. They were told it depends on site, materials and scope, and that you&apos;ll walk them through it at the consultation. No figure was given.
+              </p>
+            )}
+            <div className="mt-5"><LeadChips c={c} /></div>
           </section>
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-            <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Rubric</h2>
-            <ul className="mt-2 space-y-1 text-sm">
-              {CRITERIA.map((k) => (
-                <li key={k}><span className={`inline-block w-5 font-bold ${c.criteria[k] === "pass" ? "text-emerald-600" : c.criteria[k] === "fail" ? "text-rose-600" : "text-amber-600"}`}>{mark[c.criteria[k]]}</span>{CRITERIA_LABEL[k]}</li>
-              ))}
-            </ul>
-          </section>
+
+          <aside className="space-y-5">
+            <section className="rounded-2xl border border-line bg-white p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">Fit check</p>
+              <ul className="mt-3 space-y-2.5">
+                {CRITERIA.map((k) => (
+                  <li key={k} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${dot[c.criteria[k]]}`} />{CRITERIA_LABEL[k]}</span>
+                    <span className="text-stone-500">{word[c.criteria[k]]}</span>
+                  </li>
+                ))}
+              </ul>
+              {c.fail_evidence && <p className="mt-3 rounded-lg bg-stone-50 p-3 text-xs text-stone-600">Caller said: “{c.fail_evidence}”</p>}
+            </section>
+            <section className="rounded-2xl border border-line bg-white p-5 text-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">Call</p>
+              <dl className="mt-3 space-y-1.5 text-stone-700">
+                <div className="flex justify-between"><dt>Received</dt><dd>{dateTime(c.started_at)}{c.after_hours ? " (after hours)" : ""}</dd></div>
+                {c.duration_s ? <div className="flex justify-between"><dt>Length</dt><dd>{Math.max(1, Math.round(c.duration_s / 60))} min</dd></div> : null}
+                {c.handoff?.status && c.handoff.status !== "not_needed" && <div className="flex justify-between"><dt>Designer email</dt><dd>{c.handoff.status.replace("_", " ")}</dd></div>}
+              </dl>
+              {c.usage.errors > 0 && <div className="mt-3"><RetryButton id={c.id} k={key} /></div>}
+            </section>
+          </aside>
         </div>
 
-        <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Transcript</h2>
-          <div className="mt-3 space-y-2">
+        <section className="mt-5 rounded-2xl border border-line bg-white p-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">Transcript</p>
+          <div className="mt-4 space-y-2.5">
             {c.transcript.map((t, i) => (
-              <p key={i} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${t.role === "agent" ? "bg-slate-100" : "ml-auto bg-brand-600 text-white"}`}>{t.text}</p>
+              <div key={i} className={`flex ${t.role === "agent" ? "" : "justify-end"}`}>
+                <p className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${t.role === "agent" ? "bg-sand text-ink" : "bg-ink text-white"}`}>
+                  <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wider opacity-60">{t.role === "agent" ? "Agent" : "Caller"}</span>
+                  {t.text}
+                </p>
+              </div>
             ))}
           </div>
         </section>
