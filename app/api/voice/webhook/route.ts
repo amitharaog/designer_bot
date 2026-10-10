@@ -39,7 +39,10 @@ function parseTranscript(raw: unknown): { role: "agent" | "caller"; text: string
 
 export const POST = handle(async (req) => {
   requireWebhook(req);
-  const p = await readJson(req);
+  const raw = await readJson(req);
+  // Providers often wrap the call under data / payload / call: flatten one level so the picks below find it.
+  const nest = (k: string) => (raw[k] && typeof raw[k] === "object" && !Array.isArray(raw[k]) ? (raw[k] as Payload) : {});
+  const p: Payload = { ...raw, ...nest("call"), ...nest("payload"), ...nest("data") };
   // Vaani's payload shape isn't documented publicly: log it (truncated) so the mapping below can be checked in Vercel logs.
   console.log("[vaani] webhook payload", JSON.stringify(p).slice(0, 4000));
   const id = pick(p, "call_id", "callId", "call_sid", "session_id", "id", "conversation_id", "room_name");
@@ -52,9 +55,9 @@ export const POST = handle(async (req) => {
     return Response.json({ reply, end_call: false });
   }
   const dur = Number(pick(p, "duration_s", "duration", "call_duration"));
-  const turns = parseTranscript(p.transcript ?? p.messages ?? p.conversation);
-  // Post-call mode: the finished transcript arrives with the end event (or as its own event).
-  if (turns.length && (event === "end" || event === "call_ended" || event === "hangup" || event === "transcript" || event === "call_completed")) {
+  const turns = parseTranscript(p.transcript ?? p.messages ?? p.conversation ?? p.transcript_object ?? p.chat_history);
+  // Post-call mode (Vaani "Call Post-Processing"): a finished transcript arrives. Accept it whatever the event is named.
+  if (turns.length >= 2 || (turns.length && /end|complete|post|process|transcript|analysis|hangup/.test(event))) {
     const call = await ingestTranscript({ id, phone, turns, durationS: Number.isFinite(dur) && dur > 0 ? dur : undefined });
     return Response.json({ ok: true, route: call.route });
   }
