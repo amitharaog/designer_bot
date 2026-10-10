@@ -94,7 +94,18 @@ function demoSlots(): Slot[] {
   return out;
 }
 
+/** Book with the caller's email; if Cal.com rejects it (callers often mis-spell it on the phone), retry with the fallback. */
 export async function bookSlot(slot: Slot, lead: Lead, phone: string | null): Promise<Booking> {
+  const first = await bookOnce(slot, lead, phone);
+  const fallback = cfg.cal.fallbackEmail();
+  if (first.status === "failed" && lead.email && fallback && lead.email !== fallback) {
+    console.warn("[studio] Cal.com booking failed with the caller's email, retrying with CAL_FALLBACK_EMAIL:", first.error);
+    return bookOnce(slot, { ...lead, email: fallback }, phone);
+  }
+  return first;
+}
+
+async function bookOnce(slot: Slot, lead: Lead, phone: string | null): Promise<Booking> {
   const base = { start: slot.start, label: slot.label };
   if (!live()) return { ...base, status: "dry_run" };
   const email = lead.email || cfg.cal.fallbackEmail();

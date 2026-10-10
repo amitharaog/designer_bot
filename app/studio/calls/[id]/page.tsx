@@ -107,8 +107,13 @@ export default async function Brief(props: PageProps<"/studio/calls/[id]">) {
                 <div className="flex justify-between"><dt>Received</dt><dd>{dateTime(c.started_at)}{c.after_hours ? " (after hours)" : ""}</dd></div>
                 {c.duration_s ? <div className="flex justify-between"><dt>Length</dt><dd>{Math.max(1, Math.round(c.duration_s / 60))} min</dd></div> : null}
                 {c.handoff?.status && c.handoff.status !== "not_needed" && <div className="flex justify-between"><dt>Designer email</dt><dd>{c.handoff.status.replace("_", " ")}</dd></div>}
+                {c.booking?.status === "failed" && <div className="flex justify-between"><dt>Calendar</dt><dd>booking failed</dd></div>}
               </dl>
-              {c.usage.errors > 0 && <div className="mt-3"><RetryButton id={c.id} k={key} /></div>}
+              {c.handoff?.error && <p className="mt-3 break-words rounded-lg bg-rose-50 p-2.5 text-xs text-rose-800"><b>Email error:</b> {c.handoff.error}</p>}
+              {c.booking?.error && <p className="mt-2 break-words rounded-lg bg-rose-50 p-2.5 text-xs text-rose-800"><b>Booking error:</b> {c.booking.error}</p>}
+              {(c.usage.errors > 0 || c.handoff?.status === "failed" || c.booking?.status === "failed" || (c.route === "qualified" && !booked)) && (
+                <div className="mt-3 flex items-center gap-2 text-xs text-stone-500"><RetryButton id={c.id} k={key} /> re-runs booking and email</div>
+              )}
             </section>
           </aside>
         </div>
