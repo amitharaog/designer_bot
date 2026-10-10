@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CallButton, Chip, DateBlock, LeadChips } from "@/components/studio/LeadParts";
 import RetryButton from "@/components/studio/RetryButton";
-import StudioNav, { Locked } from "@/components/studio/StudioNav";
+import DeskShell from "@/components/studio/DeskShell";
+import { Locked } from "@/components/studio/StudioNav";
+import { deskHref, loadDesk } from "@/lib/studio/desk";
 import { studioKeyOk } from "@/lib/studio/auth";
 import { cleanCall } from "@/lib/studio/clean";
 import { dateTime, isBooked, longDate, timeShort } from "@/lib/studio/format";
@@ -16,7 +18,8 @@ export default async function Brief(props: PageProps<"/studio/calls/[id]">) {
   const raw = await getCall(id);
   if (!raw) notFound();
   const c = cleanCall(raw);
-  const kq = key ? `?key=${encodeURIComponent(key)}` : "";
+  const includeTest = q.test === "1" || c.simulated;
+  const desk = await loadDesk(includeTest);
   const booked = isBooked(c);
   const l = c.lead;
   const details: [string, string | null | undefined][] = [
@@ -41,10 +44,8 @@ export default async function Brief(props: PageProps<"/studio/calls/[id]">) {
   const word = { pass: "Yes", fail: "No", unclear: "Not confirmed" } as const;
 
   return (
-    <>
-      <StudioNav k={key} active="call" />
-      <main className="mx-auto max-w-6xl px-4 pb-24 pt-6">
-        <Link href={`/studio${kq}`} className="text-sm font-semibold text-stone-500 hover:text-ink">← Back to leads</Link>
+    <DeskShell k={key} includeTest={includeTest} active={null} counts={desk.counts}>
+        <Link href={deskHref(key, includeTest)} className="text-sm font-semibold text-stone-500 hover:text-ink">← Back to desk</Link>
 
         <section className="mt-4 flex flex-wrap items-center gap-5 rounded-2xl border border-line bg-white p-5">
           {booked && <DateBlock iso={c.booking!.start} />}
@@ -131,7 +132,6 @@ export default async function Brief(props: PageProps<"/studio/calls/[id]">) {
             ))}
           </div>
         </section>
-      </main>
-    </>
+    </DeskShell>
   );
 }
