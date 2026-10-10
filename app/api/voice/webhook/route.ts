@@ -40,7 +40,9 @@ function parseTranscript(raw: unknown): { role: "agent" | "caller"; text: string
 export const POST = handle(async (req) => {
   requireWebhook(req);
   const p = await readJson(req);
-  const id = pick(p, "call_id", "callId", "call_sid", "session_id", "id");
+  // Vaani's payload shape isn't documented publicly: log it (truncated) so the mapping below can be checked in Vercel logs.
+  console.log("[vaani] webhook payload", JSON.stringify(p).slice(0, 4000));
+  const id = pick(p, "call_id", "callId", "call_sid", "session_id", "id", "conversation_id", "room_name");
   if (!id) return Response.json({ error: "call_id is required" }, { status: 400 });
   const event = (pick(p, "event", "type") ?? "utterance").toLowerCase();
   const phone = pick(p, "from", "caller_number", "caller", "phone");
