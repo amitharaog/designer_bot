@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BriefLink, CallButton, DateBlock, LeadChips, projectLine } from "@/components/studio/LeadParts";
+import { BriefLink, CallButton, Chip, DateBlock, LeadChips, projectLine } from "@/components/studio/LeadParts";
 import RetryButton from "@/components/studio/RetryButton";
 import StudioNav, { Locked } from "@/components/studio/StudioNav";
 import { studioKeyOk } from "@/lib/studio/auth";
@@ -39,6 +39,13 @@ export default async function Desk(props: PageProps<"/studio">) {
   const leads = all.filter((c) => isLead(c) && (includeTest || !c.simulated));
   const stuck = all.filter((c) => c.finalized && c.usage.errors > 0 && c.transcript.some((t) => t.role === "caller")).slice(0, 20);
   const { upcoming, past, toSchedule, newThisWeek, greeting, today } = deskView(leads);
+  // Every call, whatever happened to it, so nothing that came in is invisible (designers only act on leads above).
+  const recent = all.filter((c) => includeTest || !c.simulated).slice(0, 15);
+  const ROUTE: Record<string, { label: string; tone: "green" | "clay" | "amber" | "stone" }> = {
+    qualified: { label: "Qualified", tone: "green" },
+    needs_review: { label: "Needs review", tone: "amber" },
+    not_qualified: { label: "Not a fit", tone: "stone" },
+  };
   const next = upcoming[0];
   const kq = key ? `?key=${encodeURIComponent(key)}` : "";
   const testHref = `/studio?${new URLSearchParams({ ...(key ? { key } : {}), ...(includeTest ? {} : { test: "1" }) })}`;
@@ -131,6 +138,31 @@ export default async function Desk(props: PageProps<"/studio">) {
             </ul>
           </details>
         )}
+
+        <details className="mt-10 rounded-2xl border border-line bg-white p-4" open={leads.length === 0}>
+          <summary className="cursor-pointer font-display text-lg text-ink">All recent calls <span className="font-sans text-sm text-stone-400">{recent.length}</span></summary>
+          <p className="mt-1 text-xs text-stone-500">Every call that reached the app, including ones that didn&apos;t qualify. Rejections are reviewed by the founder in HubSpot.</p>
+          {recent.length === 0 ? (
+            <p className="mt-3 text-sm text-stone-500">No calls have reached the app yet. Check the Vaani webhook and Vercel logs.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-line">
+              {recent.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 text-sm">
+                  <span className="min-w-0 flex-1">
+                    <b className="text-ink">{c.lead.name ?? c.caller_phone ?? "Unknown caller"}</b>
+                    <span className="text-stone-500"> · {dateTime(c.started_at)}</span>
+                    <span className="block truncate text-xs text-stone-500">{c.route_reason ?? (c.finalized ? "" : "Call in progress")}</span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    {c.route ? <Chip tone={ROUTE[c.route].tone}>{ROUTE[c.route].label}</Chip> : <Chip>In progress</Chip>}
+                    {c.simulated && <Chip>Test</Chip>}
+                    <BriefLink id={c.id} kq={kq} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
 
         {stuck.length > 0 && (
           <div className="mt-10 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
