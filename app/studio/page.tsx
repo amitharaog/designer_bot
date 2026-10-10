@@ -76,8 +76,7 @@ export default async function Desk(props: PageProps<"/studio">) {
         <SectionTitle title="Upcoming consultations" count={upcoming.length} />
         {upcoming.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line bg-white/60 p-10 text-center text-stone-500">
-            No consultations booked yet. When a caller qualifies, the agent books a slot and it shows up here.{" "}
-            <Link className="font-semibold text-clay-700 underline" href={`/studio/simulate${kq}`}>Try a call</Link>
+            No consultations booked yet. When a caller qualifies, the agent books a slot and it shows up here.
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">

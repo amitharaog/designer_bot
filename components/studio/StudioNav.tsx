@@ -16,7 +16,6 @@ export default function StudioNav({ k, active }: { k: string | null; active: "da
         </Link>
         <nav className="flex gap-1">
           <Link href={`/studio${q}`} className={tab(active !== "simulate")}>Leads</Link>
-          <Link href={`/studio/simulate${q}`} className={tab(active === "simulate")}>Try a call</Link>
         </nav>
       </div>
     </header>
