@@ -2,6 +2,7 @@ import "server-only";
 import { cfg } from "./config";
 import { geminiJson, type GeminiMsg } from "./gemini";
 import { loadKnowledge } from "./knowledge";
+import { cleanLead, cleanText, looksLeaky, META } from "./clean";
 import { CRITERIA, type CallRecord, type Criteria, type Lead } from "./types";
 
 export const GREETING =
@@ -98,6 +99,7 @@ ${slots}
 ${booked ? `A consultation is ALREADY BOOKED for ${call.booking!.label}. Do not book again. Answer any last questions, then say goodbye and set end_call true.` : "When the caller clearly picks a slot, put its exact id in chosen_slot and write a short reply; the system confirms the booking itself. If they decline a time, say a designer will call to arrange one, thank them, and end the call."}
 
 # Output (JSON only)
+Every value is plain data: short facts in a few words, never your reasoning, notes to yourself, or text about JSON.
 - reply: exactly what you say next.
 - criteria: current state of all five (carry forward earlier values unless new information changes them).
 - lead: facts the caller has stated so far (name, email only if they volunteered one, location, project_type, size, timeline, budget_mentioned, decision_maker_note, scope_notes). Keep earlier values; use null for unknown.
@@ -117,7 +119,21 @@ export async function runTurn(call: CallRecord) {
   const messages: GeminiMsg[] = call.transcript.map((t) => ({ role: t.role === "caller" ? "user" : "model", text: t.text }));
   // Gemini expects the conversation to start with a user turn; the spoken greeting is an agent turn.
   while (messages.length && messages[0].role === "model") messages.shift();
-  return geminiJson<TurnOut>({ system: await systemPrompt(call), messages, schema: TURN_SCHEMA });
+  const req = { system: await systemPrompt(call), messages, schema: TURN_SCHEMA };
+  let out = await geminiJson<TurnOut>(req);
+  if (looksLeaky(out.data)) {
+    console.warn("[studio] model leaked reasoning into its answer; retrying once");
+    const again = await geminiJson<TurnOut>(req);
+    again.usage = { input_tokens: out.usage.input_tokens + again.usage.input_tokens, output_tokens: out.usage.output_tokens + again.usage.output_tokens };
+    out = again;
+  }
+  out.data.lead = cleanLead(out.data.lead);
+  out.data.summary = cleanText(out.data.summary, 400);
+  out.data.fail_evidence = cleanText(out.data.fail_evidence, 200);
+  out.data.caller_questions = (out.data.caller_questions ?? []).map((q) => cleanText(q, 160)).filter(Boolean);
+  // never speak the model's reasoning to a caller
+  if (!out.data.reply || META.test(out.data.reply) || out.data.reply.length > 600) out.data.reply = "Sorry, could you say that once more?";
+  return out;
 }
 
 /** Does the caller's utterance ask about price? Deterministic. A caller volunteering their own budget is NOT a price question. */
@@ -167,13 +183,28 @@ For each of the five criteria in <qualification_rubric> return "pass" (the calle
 - timeline: site ready for execution within 8-10 weeks of the consultation; needing it in under 6 weeks fails.
 - budget: only "fail" if the caller volunteered a number clearly far below any project of that scope; otherwise "unclear". Do not infer.
 - decision_maker: "unclear" unless clear.
-Also return lead (facts the caller stated; null if unknown), caller_questions (things the designer should be ready for), a 1-2 sentence factual summary for the designer, and fail_evidence: the caller's exact words behind any "fail" (else null). Never mention prices or rates in the summary.
+Also return lead (facts the caller stated; null if unknown), caller_questions (things the designer should be ready for), a 1-2 sentence factual summary for the designer, and fail_evidence: the caller's exact words behind any "fail" (else null). Never mention prices or rates in the summary. Every JSON value must be plain short data (a few words; the summary 1-2 sentences), never your reasoning or notes about the JSON.
 
 <transcript>
 ${transcript}
 </transcript>
 
 ${docs}`;
+  const out = await analyzeOnce(system);
+  if (looksLeaky(out.data)) {
+    console.warn("[studio] model leaked reasoning into its analysis; retrying once");
+    const again = await analyzeOnce(system);
+    again.usage = { input_tokens: out.usage.input_tokens + again.usage.input_tokens, output_tokens: out.usage.output_tokens + again.usage.output_tokens };
+    Object.assign(out, again);
+  }
+  out.data.lead = cleanLead(out.data.lead);
+  out.data.summary = cleanText(out.data.summary, 400);
+  out.data.fail_evidence = cleanText(out.data.fail_evidence, 200);
+  out.data.caller_questions = (out.data.caller_questions ?? []).map((q) => cleanText(q, 160)).filter(Boolean);
+  return out;
+}
+
+function analyzeOnce(system: string) {
   return geminiJson<AnalysisOut>({
     system,
     messages: [{ role: "user", text: "Analyse this call." }],

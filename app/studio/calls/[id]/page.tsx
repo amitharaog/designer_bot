@@ -4,6 +4,7 @@ import { CallButton, Chip, DateBlock, LeadChips } from "@/components/studio/Lead
 import RetryButton from "@/components/studio/RetryButton";
 import StudioNav, { Locked } from "@/components/studio/StudioNav";
 import { studioKeyOk } from "@/lib/studio/auth";
+import { cleanCall } from "@/lib/studio/clean";
 import { dateTime, isBooked, longDate, timeShort } from "@/lib/studio/format";
 import { getCall } from "@/lib/studio/store";
 import { CRITERIA, CRITERIA_LABEL } from "@/lib/studio/types";
@@ -12,8 +13,9 @@ export default async function Brief(props: PageProps<"/studio/calls/[id]">) {
   const [{ id }, q] = await Promise.all([props.params, props.searchParams]);
   const key = typeof q.key === "string" ? q.key : null;
   if (!studioKeyOk(key)) return <Locked />;
-  const c = await getCall(id);
-  if (!c) notFound();
+  const raw = await getCall(id);
+  if (!raw) notFound();
+  const c = cleanCall(raw);
   const kq = key ? `?key=${encodeURIComponent(key)}` : "";
   const booked = isBooked(c);
   const l = c.lead;

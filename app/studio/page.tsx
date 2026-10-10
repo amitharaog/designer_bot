@@ -3,6 +3,7 @@ import { BriefLink, CallButton, Chip, DateBlock, LeadChips, projectLine } from "
 import RetryButton from "@/components/studio/RetryButton";
 import StudioNav, { Locked } from "@/components/studio/StudioNav";
 import { studioKeyOk } from "@/lib/studio/auth";
+import { cleanCall } from "@/lib/studio/clean";
 import { dateTime, deskView, longDate, timeShort } from "@/lib/studio/format";
 import { listCalls } from "@/lib/studio/store";
 import type { CallRecord } from "@/lib/studio/types";
@@ -35,7 +36,7 @@ export default async function Desk(props: PageProps<"/studio">) {
   const key = typeof q.key === "string" ? q.key : null;
   if (!studioKeyOk(key)) return <Locked />;
   const includeTest = q.test === "1";
-  const all = await listCalls();
+  const all = (await listCalls()).map(cleanCall);
   const leads = all.filter((c) => isLead(c) && (includeTest || !c.simulated));
   const stuck = all.filter((c) => c.finalized && c.usage.errors > 0 && c.transcript.some((t) => t.role === "caller")).slice(0, 20);
   const { upcoming, past, toSchedule, newThisWeek, greeting, today } = deskView(leads);
