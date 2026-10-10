@@ -1,5 +1,5 @@
 import { requireWebhook } from "@/lib/studio/auth";
-import { finalizeCall, handleUtterance, startCall } from "@/lib/studio/engine";
+import { finalizeCall, handleUtterance, ingestTranscript, startCall } from "@/lib/studio/engine";
 import { getCall } from "@/lib/studio/store";
 import { handle, readJson } from "@/lib/http";
 
@@ -18,6 +18,25 @@ const pick = (p: Payload, ...keys: string[]) => {
   return undefined;
 };
 
+/** Accepts [{role|speaker, text|content|message}] or "Agent: ...\nCaller: ..." lines. */
+function parseTranscript(raw: unknown): { role: "agent" | "caller"; text: string }[] {
+  const role = (r: unknown) => (/agent|bot|assistant|ai|model/i.test(String(r)) ? "agent" : "caller") as "agent" | "caller";
+  if (Array.isArray(raw)) {
+    return raw
+      .map((m) => (m && typeof m === "object" ? (m as Payload) : {}))
+      .map((m) => ({ role: role(m.role ?? m.speaker ?? m.from), text: String(m.text ?? m.content ?? m.message ?? "").trim() }))
+      .filter((m) => m.text);
+  }
+  if (typeof raw === "string") {
+    return raw
+      .split(/\r?\n/)
+      .map((l) => l.match(/^\s*([A-Za-z ]{2,20}):\s*(.+)$/))
+      .filter((m): m is RegExpMatchArray => !!m)
+      .map((m) => ({ role: role(m[1]), text: m[2].trim() }));
+  }
+  return [];
+}
+
 export const POST = handle(async (req) => {
   requireWebhook(req);
   const p = await readJson(req);
@@ -30,9 +49,15 @@ export const POST = handle(async (req) => {
     const { reply } = await startCall({ id, phone });
     return Response.json({ reply, end_call: false });
   }
+  const dur = Number(pick(p, "duration_s", "duration", "call_duration"));
+  const turns = parseTranscript(p.transcript ?? p.messages ?? p.conversation);
+  // Post-call mode: the finished transcript arrives with the end event (or as its own event).
+  if (turns.length && (event === "end" || event === "call_ended" || event === "hangup" || event === "transcript" || event === "call_completed")) {
+    const call = await ingestTranscript({ id, phone, turns, durationS: Number.isFinite(dur) && dur > 0 ? dur : undefined });
+    return Response.json({ ok: true, route: call.route });
+  }
   if (event === "end" || event === "call_ended" || event === "hangup") {
     if (!(await getCall(id))) return Response.json({ ok: true });
-    const dur = Number(pick(p, "duration_s", "duration", "call_duration"));
     await finalizeCall(id, "hangup", Number.isFinite(dur) && dur > 0 ? dur : undefined);
     return Response.json({ ok: true });
   }

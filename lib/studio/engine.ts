@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { asksPrice, FALLBACK_REPLY, GREETING, guardReply, PRICING_DEFLECTION, runTurn } from "./agent";
+import { analyzeTranscript, asksPrice, FALLBACK_REPLY, GREETING, guardReply, PRICING_DEFLECTION, runTurn } from "./agent";
 import { bookSlot, getSlots } from "./calcom";
 import { cfg } from "./config";
 import { sendEmail } from "./email";
@@ -9,7 +9,7 @@ import { syncHubspot } from "./hubspot";
 import { reviewUrl } from "./review";
 import { blankCriteria, isCrit, verdict } from "./rubric";
 import { getCall, saveCall } from "./store";
-import { CRITERIA, type CallRecord, type Route } from "./types";
+import { CRITERIA, type CallRecord, type Route, type Turn } from "./types";
 
 const FORCE_WRAP =
   "I want to be respectful of your time. I've noted everything you've told me, and a member of our team will call you back to take it forward. Thank you for calling Aangan Studio.";
@@ -207,4 +207,79 @@ export async function founderDecide(id: string, decision: "forward" | "keep"): P
   call.hubspot = await syncHubspot(call);
   await saveCall(call);
   return call;
+}
+
+/**
+ * Post-call mode: Vaani runs the whole conversation and sends the finished transcript.
+ * Analyse it once, qualify, book the earliest slot for qualified leads, then the normal finalize
+ * (designer email / founder review / HubSpot). Idempotent per call id.
+ */
+export async function ingestTranscript(opts: { id?: string; phone?: string | null; turns: Omit<Turn, "at">[]; durationS?: number; simulated?: boolean }) {
+  const id = opts.id || randomUUID();
+  const existing = await getCall(id);
+  if (existing?.finalized) return existing;
+
+  const now = new Date();
+  const call: CallRecord = existing ?? {
+    id,
+    simulated: !!opts.simulated,
+    caller_phone: opts.phone?.trim() || null,
+    started_at: new Date(now.getTime() - (opts.durationS ?? 0) * 1000).toISOString(),
+    ended_at: null,
+    after_hours: false,
+    transcript: [],
+    criteria: blankCriteria(),
+    lead: {},
+    summary: "",
+    caller_questions: [],
+    pricing_asked: false,
+    slots: [],
+    booking: null,
+    route: null,
+    route_reason: null,
+    handoff: null,
+    usage: { input_tokens: 0, output_tokens: 0, model_calls: 0, errors: 0 },
+    duration_s: null,
+    cost: null,
+    founder_decision: null,
+    fail_evidence: "",
+    hubspot: null,
+    finalized: false,
+  };
+  call.after_hours = afterHours(new Date(call.started_at));
+  call.transcript = opts.turns.map((t) => ({ ...t, at: now.toISOString() }));
+  call.pricing_asked = call.transcript.some((t) => t.role === "caller" && asksPrice(t.text));
+
+  if (call.transcript.some((t) => t.role === "caller")) {
+    try {
+      const { data, usage } = await analyzeTranscript(call);
+      call.usage.model_calls++;
+      call.usage.input_tokens += usage.input_tokens;
+      call.usage.output_tokens += usage.output_tokens;
+      for (const k of CRITERIA) if (isCrit(data.criteria?.[k])) call.criteria[k] = data.criteria[k];
+      for (const [k, v] of Object.entries(data.lead ?? {})) if (typeof v === "string" && v.trim()) (call.lead as Record<string, string>)[k] = v.trim();
+      call.summary = data.summary ?? "";
+      call.caller_questions = (data.caller_questions ?? []).slice(0, 10);
+      call.fail_evidence = data.fail_evidence?.trim() ?? "";
+      // a rejection that can't be quoted is not trusted; the founder/designer can still see the transcript
+      if (!call.fail_evidence) for (const k of CRITERIA) if (call.criteria[k] === "fail") call.criteria[k] = "unclear";
+    } catch (e) {
+      console.error("[studio] transcript analysis failed", e);
+      call.usage.errors++;
+      call.route_reason = `AI error: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+
+  // Qualified: book the earliest slot (the caller was told a designer will confirm a time).
+  if (verdict(call.criteria).kind === "qualified" && !call.usage.errors && !call.booking) {
+    try {
+      const { slots } = await getSlots();
+      call.slots = slots;
+      if (slots[0]) call.booking = await bookSlot(slots[0], call.lead, call.caller_phone);
+    } catch (e) {
+      console.error("[studio] post-call booking failed", e);
+    }
+  }
+  await saveCall(call);
+  return finalizeCall(id, "transcript", opts.durationS);
 }

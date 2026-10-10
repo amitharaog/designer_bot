@@ -133,3 +133,51 @@ export function guardReply(reply: string): { reply: string; blocked: boolean } {
   if (PRICE_LEAK.test(reply)) return { reply: PRICING_DEFLECTION, blocked: true };
   return { reply, blocked: false };
 }
+
+// ---- Post-call analysis: Vaani runs the conversation, we analyse the finished transcript. ----
+
+export const ANALYSIS_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    criteria: TURN_SCHEMA.properties.criteria,
+    lead: TURN_SCHEMA.properties.lead,
+    caller_questions: TURN_SCHEMA.properties.caller_questions,
+    summary: { type: "STRING" },
+    fail_evidence: str,
+  },
+  required: ["criteria", "lead", "summary"],
+};
+
+export type AnalysisOut = {
+  criteria: Criteria;
+  lead: Lead;
+  caller_questions?: string[];
+  summary: string;
+  fail_evidence?: string | null;
+};
+
+export async function analyzeTranscript(call: CallRecord) {
+  const { docs } = await loadKnowledge();
+  const transcript = call.transcript.map((t) => `${t.role === "agent" ? "AGENT" : "CALLER"}: ${t.text}`).join("\n");
+  const system = `You review a FINISHED phone call between Aangan Studio's phone agent and a caller, and judge whether the enquiry is worth a designer's time. Use only what the caller actually said.
+
+For each of the five criteria in <qualification_rubric> return "pass" (the caller's words clearly satisfy it), "fail" (clearly does not) or "unclear" (not said). Never guess "pass" from silence. A "fail" must be CLEAR: if the transcript is garbled, ambiguous or you are inferring, return "unclear". A wrong rejection loses a real customer, and the founder reviews every rejection.
+- real_project: wants design AND execution (not just advice/decor/styling/standalone furniture/Vastu-only/architecture/structural). Retail, hospitality, gyms, or over ~3000 sq ft commercial = fail.
+- in_area: site in Pune city or PCMC per <services>. Outside = fail.
+- timeline: site ready for execution within 8-10 weeks of the consultation; needing it in under 6 weeks fails.
+- budget: only "fail" if the caller volunteered a number clearly far below any project of that scope; otherwise "unclear". Do not infer.
+- decision_maker: "unclear" unless clear.
+Also return lead (facts the caller stated; null if unknown), caller_questions (things the designer should be ready for), a 1-2 sentence factual summary for the designer, and fail_evidence: the caller's exact words behind any "fail" (else null). Never mention prices or rates in the summary.
+
+<transcript>
+${transcript}
+</transcript>
+
+${docs}`;
+  return geminiJson<AnalysisOut>({
+    system,
+    messages: [{ role: "user", text: "Analyse this call." }],
+    schema: ANALYSIS_SCHEMA,
+    timeoutMs: 25_000,
+  });
+}
