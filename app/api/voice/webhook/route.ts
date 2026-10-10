@@ -46,7 +46,8 @@ export const POST = handle(async (req) => {
   // Vaani's payload shape isn't documented publicly: log it (truncated) so the mapping below can be checked in Vercel logs.
   console.log("[vaani] webhook payload", JSON.stringify(p).slice(0, 4000));
   const id = pick(p, "call_id", "callId", "call_sid", "session_id", "id", "conversation_id", "room_name");
-  if (!id) return Response.json({ error: "call_id is required" }, { status: 400 });
+  // Vaani's "Test Connectivity" ping carries no call: acknowledge it so the setup check passes.
+  if (!id) return Response.json({ ok: true, note: "received; no call id, nothing to process" });
   const event = (pick(p, "event", "type") ?? "utterance").toLowerCase();
   const phone = pick(p, "from", "caller_number", "caller", "phone");
 
