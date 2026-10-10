@@ -31,13 +31,16 @@ export async function getSlots(): Promise<{ slots: Slot[]; demo: boolean }> {
   });
   if (!res.ok) throw new Error(`Cal.com slots ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const body = await res.json();
-  const days = Object.keys(body?.data ?? {}).sort();
+  // v2 replies as {data: {"YYYY-MM-DD": [{start}]}}; older versions as {data: {slots: {...}}}; entries may be strings.
+  const byDay: Record<string, unknown[]> = body?.data?.slots ?? body?.data ?? body?.slots ?? {};
   const slots: Slot[] = [];
-  for (const d of days) {
-    const first = body.data[d]?.[0]?.start;
-    if (first) slots.push({ start: first, label: slotLabel(first) });
+  for (const d of Object.keys(byDay).sort()) {
+    const first = byDay[d]?.[0] as string | { start?: string; time?: string } | undefined;
+    const iso = typeof first === "string" ? first : (first?.start ?? first?.time);
+    if (iso) slots.push({ start: iso, label: slotLabel(iso) });
     if (slots.length === 3) break;
   }
+  if (!slots.length) console.warn("[studio] Cal.com returned no free slots in the next 10 days:", JSON.stringify(body).slice(0, 300));
   return { slots, demo: false };
 }
 
