@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+
+  /* Brand: indigo, matching step 1 of the flow */
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
+  --color-brand-900: #312e81;
+
+  /* One colour per stage: set up, collect, decide, commit */
+  --color-setup: #4f46e5;
+  --color-collect: #0891b2;
+  --color-decide: #d97706;
+  --color-commit: #059669;
+
+  --color-ink: #0f172a;
+  --color-canvas: #f5f6fb;
+
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px -12px rgb(15 23 42 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(15 23 42 / 0.05), 0 18px 40px -16px rgb(79 70 229 / 0.35);
+
+  --animate-rise: rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-pop: pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(60rem 30rem at 110% -10%, rgb(99 102 241 / 0.12), transparent 60%),
+    radial-gradient(40rem 24rem at -20% 0%, rgb(8 145 178 / 0.1), transparent 60%);
+  background-repeat: no-repeat;
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--color-brand-200);
+}
+
+dialog::backdrop {
+  background: rgb(15 23 42 / 0.45);
+  backdrop-filter: blur(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aangan Studio - AI Phone Agent - Components Map</title>
+<style>
+  body { margin: 0; padding: 32px; font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #ffffff; color: #1c2434; }
+  h1 { text-align: center; font-size: 26px; font-weight: 600; margin: 0 0 6px; color: #1c2a48; }
+  .sub { text-align: center; font-size: 14px; color: #5a6478; margin: 0 0 24px; }
+  .wrap { overflow-x: auto; }
+  .grid { display: grid; grid-template-columns: 150px repeat(6, minmax(150px, 1fr)); min-width: 1100px; border-radius: 10px; overflow: hidden; border: 1px solid #d5dae3; }
+  .h { background: #1c2a48; color: #fff; font-weight: 600; font-size: 15px; text-align: center; padding: 14px 8px; }
+  .a { background: #1c2a48; color: #fff; font-weight: 600; font-size: 15px; text-align: center; padding: 12px 8px; display: flex; flex-direction: column; justify-content: center; border-top: 1px solid #33426a; }
+  .a span { font-weight: 400; font-size: 13px; color: #c6cde0; margin-top: 2px; }
+  .c { border-top: 1px solid #e3e7ee; border-left: 1px solid #e3e7ee; padding: 10px; min-height: 92px; display: flex; align-items: center; }
+  .r1 { background: #eef2fd; } .r2 { background: #f3effc; } .r3 { background: #fdf9ea; }
+  .r4 { background: #eaf6ef; } .r5 { background: #eaf4fb; } .r6 { background: #fcedf2; } .r7 { background: #f4f4f1; }
+  .b { width: 100%; border-radius: 8px; padding: 10px; font-size: 13px; line-height: 1.4; text-align: center; border: 1.5px solid; background: #fff; }
+  .b .n { display: block; font-weight: 700; margin-bottom: 3px; }
+  .blue { border-color: #4a63d9; background: #e3e8fd; color: #1e2f80; }
+  .purple { border-color: #7b5ad1; background: #ece5fb; color: #3d2585; }
+  .amber { border-color: #e0a12a; background: #fdf0d2; color: #6a4708; }
+  .green { border-color: #3aa165; background: #def3e6; color: #17532f; }
+  .pink { border-color: #d64b85; background: #fbe0eb; color: #7a1e45; }
+  .teal { border-color: #2b8fb8; background: #dcf0f8; color: #0e4a63; }
+  .coral { border-color: #e0573a; background: #fde6df; color: #7a2410; }
+  .notes { max-width: 1100px; margin: 28px auto 0; font-size: 14px; line-height: 1.6; }
+  .notes h2 { font-size: 17px; color: #1c2a48; margin: 20px 0 6px; }
+  .notes ol, .notes ul { margin: 0; padding-left: 22px; }
+</style>
+</head>
+<body>
+
+<h1>Aangan Studio &middot; AI Phone Enquiry Agent &mdash; Components Map</h1>
+<p class="sub">Trigger &rarr; Input &rarr; Context &rarr; Processing &rarr; AI &rarr; Output &nbsp;|&nbsp; Scope: incoming phone calls only</p>
+
+<div class="wrap">
+<div class="grid">
+  <div class="h">Actor</div><div class="h">Trigger</div><div class="h">Input</div><div class="h">Context</div><div class="h">Processing</div><div class="h">AI</div><div class="h">Output</div>
+
+  <!-- Client -->
+  <div class="a">Client<span>(Caller)</span></div>
+  <div class="c r1"><div class="b blue"><span class="n">1</span>Calls the Aangan studio number, any time (24x7)</div></div>
+  <div class="c r1"></div><div class="c r1"></div><div class="c r1"></div><div class="c r1"></div>
+  <div class="c r1"><div class="b coral"><span class="n">7</span>Gets instant answers + confirmation of designer call (from Cal.com)</div></div>
+
+  <!-- Vaani -->
+  <div class="a">Voice Agent<span>(Vaani Labs)</span></div>
+  <div class="c r2"></div>
+  <div class="c r2"><div class="b purple"><span class="n">2</span>Picks up within seconds; live speech-to-text + caller number, time, language</div></div>
+  <div class="c r2"></div><div class="c r2"></div><div class="c r2"></div><div class="c r2"></div>
+
+  <!-- System -->
+  <div class="a">System<span>(App Backend)</span></div>
+  <div class="c r3"></div><div class="c r3"></div>
+  <div class="c r3"><div class="b green"><span class="n">3</span>Loads services.md, qualified.md, pricing.md (indicative only) + past enquiries as examples</div></div>
+  <div class="c r3"><div class="b amber"><span class="n">4</span>Asks rubric questions, extracts lead fields, routes: Qualified / Needs review (front desk) / Not qualified</div></div>
+  <div class="c r3"></div><div class="c r3"></div>
+
+  <!-- Gemini -->
+  <div class="a">AI Model<span>(Gemini API)</span></div>
+  <div class="c r4"></div><div class="c r4"></div><div class="c r4"></div><div class="c r4"></div>
+  <div class="c r4"><div class="b pink"><span class="n">5</span>Live replies on the call, scores lead vs rubric, writes designer handoff note. Pricing: range only, never a firm quote</div></div>
+  <div class="c r4"></div>
+
+  <!-- Cal.com -->
+  <div class="a">Calendar<span>(Cal.com)</span></div>
+  <div class="c r5"></div><div class="c r5"></div><div class="c r5"></div><div class="c r5"></div><div class="c r5"></div>
+  <div class="c r5"><div class="b teal"><span class="n">6</span>Books slot on the assigned designer's calendar (qualified leads only)</div></div>
+
+  <!-- Email -->
+  <div class="a">Email Service<span>(to Designer)</span></div>
+  <div class="c r6"></div><div class="c r6"></div><div class="c r6"></div><div class="c r6"></div><div class="c r6"></div>
+  <div class="c r6"><div class="b coral"><span class="n">8</span>Handoff note + transcript + booked call details sent to designer</div></div>
+
+  <!-- Founder -->
+  <div class="a">Founder<span>(Dashboard)</span></div>
+  <div class="c r7"></div><div class="c r7"></div><div class="c r7"></div><div class="c r7"></div><div class="c r7"></div>
+  <div class="c r7"><div class="b coral"><span class="n">9</span>Dashboard: calls, response time, qualified %, bookings, conversions, cost per call / per lead</div></div>
+</div>
+</div>
+
+<div class="notes">
+  <h2>Flow (step by step)</h2>
+  <ol>
+    <li>Trigger: Client calls the studio number, day or night.</li>
+    <li>Input: Vaani Labs answers instantly and streams the transcript plus caller metadata.</li>
+    <li>Context: System loads services.md, qualified.md, pricing.md (guarded) and past enquiries (as examples, not training).</li>
+    <li>Processing: Conversation follows the qualified.md checklist; lead fields extracted; lead routed.</li>
+    <li>AI: Gemini answers live, scores the lead and writes the designer handoff note.</li>
+    <li>Output: Cal.com books the designer's slot for qualified leads.</li>
+    <li>Output: Client receives answers and booking confirmation.</li>
+    <li>Output: Designer receives the handoff email with full context, so no repeated questions.</li>
+    <li>Output: Every call, outcome and API cost is logged to Nikhil's dashboard.</li>
+  </ol>
+
+  <h2>The Cut</h2>
+  <p>Nikhil wants the system to quote standard per-square-foot pricing. pricing.md says "indicative only, varies by site", so the agent shares only a broad indicative range with a caveat. Firm quotes stay with the designer after a site visit.</p>
+
+  <h2>Why email (not Telegram) for designer handoff</h2>
+  <ul>
+    <li>The call is already booked, so a complete written brief matters more than an instant ping.</li>
+    <li>The note sits next to the Cal.com invite, is searchable, and forms a record for the studio.</li>
+    <li>No dependency on 14 designers using a personal messaging app.</li>
+  </ul>
+
+  <h2>Stack</h2>
+  <ul>
+    <li>Voice and telephony: Vaani Labs</li>
+    <li>LLM: Gemini API</li>
+    <li>Booking: Cal.com</li>
+    <li>Handoff: Email</li>
+    <li>Later: WhatsApp and web form reuse the same Context, Processing, AI and Output; only the Trigger and Input change.</li>
+  </ul>
+</div>
+
+</body>
+</html>
